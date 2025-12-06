@@ -1,0 +1,15 @@
+names:
+- cabina
+- salon
+- vestibulo
+- wc_normal
+- bufet
+- fuelles
+- anexo
+- bicicletas
+- personal
+- wc_pmr
+- corredor
+nc: 11
+train: /home/pablo/Documents/pro_vision/planos/train
+val: /home/pablo/Documents/pro_vision/planos/val
