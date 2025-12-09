@@ -1,112 +1,105 @@
 import cv2
 import numpy as np
-
-import re
+import pytesseract
 import math
-import shutil
+import re 
 import os
 
-IMG_FOLDER = "/home/pablo/Documents/pro_vision/planos/comprobar_manual/images/10.jpg"
+os.environ["QT_QPA_PLATFORM"] = "xcb"
 
-img = cv2.imread(IMG_FOLDER)
+# Configuración de ruta (tu ruta original)
+IMG_PATH = "/home/pablo/Documents/pro_vision/planos/comprobar_manual/images/10.jpg"
 
-# tolerancia zona superior donde buscar la linea (ej: 20% superior)
-TOP_CROP_RATIO = 0.50
+def procesar_plano(img_path):
+    # 1. Cargar imagen
+    img = cv2.imread(img_path)
+    if img is None:
+        print("Error: No se pudo cargar la imagen.")
+        return
 
-# color rango HSV para la linea gris-verdosa (ajustable)
-HSV_MIN = np.array([0, 0, 0])   # hue, sat, val
-HSV_MAX = np.array([95, 200, 255])
+    # Convertir a escala de grises
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-# Hough params
-HOUGH_RHO = 1
-HOUGH_THETA = np.pi/180
-HOUGH_THRESHOLD = 50
+    # 2. Preprocesamiento para detectar líneas
+    # Aplicar un umbral o Canny para resaltar bordes
+    edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+    
+    # 3. Detectar líneas usando la Transformada de Hough Probabilística
+    # minLineLength: Longitud mínima para ser considerada línea (ajústalo según el tamaño de tu imagen)
+    # maxLineGap: Brecha máxima entre puntos para considerarlos la misma línea
+    lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=200, maxLineGap=20)
 
-def detect_scale_line_and_number(img):
-    """
-    Intenta detectar la línea de escala y el número encima.
-    Devuelve: (line_px_length, number_mm) o (None, None) si falla.
-    """
-    H, W = img.shape[:2]
-    top_h = int(H * TOP_CROP_RATIO)
-    top_region = img[0:top_h, :].copy()
-
-    # convertir a HSV y enmascarar color aproximado
-    hsv = cv2.cvtColor(top_region, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, HSV_MIN, HSV_MAX)
-    # limpiar
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-
-    # bordes y Hough
-    edges = cv2.Canny(mask, 50, 150, apertureSize=3)
-    min_len = int(W * 0.30)
-    lines = cv2.HoughLinesP(edges, HOUGH_RHO, HOUGH_THETA, HOUGH_THRESHOLD, minLineLength=min_len, maxLineGap=50)
     if lines is None:
-        return None, None
+        print("No se detectaron líneas.")
+        return
 
-    # elegir la línea más horizontal y más larga (cercana a la parte superior)
+    # 4. Filtrar la línea de cota (asumimos que es horizontal y larga)
     best_line = None
-    best_len = 0
-    for l in lines:
-        x1, y1, x2, y2 = l[0]
-        length = math.hypot(x2 - x1, y2 - y1)
-        angle_deg = abs(math.degrees(math.atan2(y2 - y1, x2 - x1)))
-        # casi horizontal: ángulo < 10 grados
-        if angle_deg < 10 and length > best_len:
-            best_len = length
-            best_line = (x1, y1, x2, y2)
+    max_length = 0
+
+    for line in lines:
+        x1, y1, x2, y2 = line[0]
+        # Calcular longitud
+        length = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+        
+        # Calcular ángulo para asegurar que sea más o menos horizontal (tolerancia +/- 10 grados)
+        angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
+        if abs(angle) < 10 or abs(angle) > 170:
+            if length > max_length:
+                max_length = length
+                best_line = (x1, y1, x2, y2)
 
     if best_line is None:
-        return None, None
+        print("No se encontró una línea horizontal adecuada.")
+        return
 
     x1, y1, x2, y2 = best_line
-    # longitud en px (en la imagen completa, no sólo recorte)
-    # ajustar coordenadas a imagen completa (top_region origin 0)
-    line_len_px = math.hypot(x2 - x1, y2 - y1)
+    distancia_pixeles = max_length
+    print(f"Línea detectada: P1({x1},{y1}) - P2({x2},{y2})")
+    print(f"Longitud en píxeles: {distancia_pixeles:.2f} px")
 
-    # ROI para OCR: caja encima de la línea (mayor seguridad)
-    # coordenadas en la imagen global:
-    y_line_global = y2  # dentro top_region
-    # define top box
-    roi_y1 = max(0, y_line_global - int(top_h * 0.4) - 10)
-    roi_y2 = max(0, y_line_global - 2)
-    roi_x1 = max(0, int(min(x1, x2) - 0.05 * W))
-    roi_x2 = min(W, int(max(x1, x2) + 0.05 * W))
-    roi = img[roi_y1:roi_y2, roi_x1:roi_x2].copy()
-    if roi.size == 0:
-        return line_len_px, None
+    # Dibujar la línea en la imagen para visualizar
+    cv2.line(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
 
-    # preprocesado OCR: convertir a gris y binarizar
-    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    # aumentar contraste
-    gray = cv2.equalizeHist(gray)
-    _, thr = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    # usar pytesseract para leer solo dígitos
-    try:
-        ensure_tesseract()
-        custom_oem_psm_config = r'--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789'
-        text = pytesseract.image_to_string(thr, config=custom_oem_psm_config)
-    except Exception as e:
-        # en caso de que tesseract no esté disponible, devolvemos None para que haga fallback manual
-        print("[AVISO] OCR no disponible o falló:", e)
-        return line_len_px, None
-
-    # extraer dígitos
-    digits = re.findall(r'\d+', text)
-    if not digits:
-        return line_len_px, None
-    # tomar el mayor conjunto de dígitos leídos (por si hay fragmentos)
-    number_str = max(digits, key=len)
-    try:
-        number_mm = int(number_str)
-        return line_len_px, number_mm
-    except:
-        return line_len_px, None
+    # 5. Detectar y leer el número (OCR)
+    # Definimos una Región de Interés (ROI) alrededor del centro de la línea
+    # Asumimos que el texto está "encima" o en el centro de la línea
+    center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
     
+    # Definir un margen para buscar el texto (ajusta el tamaño del cuadro según tu imagen)
+    w_roi, h_roi = 200, 100 
+    y_start = max(0, center_y - h_roi)
+    y_end = min(gray.shape[0], center_y + 10) # Un poco por debajo de la línea
+    x_start = max(0, center_x - w_roi // 2)
+    x_end = min(gray.shape[1], center_x + w_roi // 2)
 
-line_len_px, number_mm = detect_scale_line_and_number(img)
+    roi = gray[y_start:y_end, x_start:x_end]
 
-print ("Longitud línea escala (px): %s\n" % (line_len_px if line_len_px is not None else "No detectada"))
+    # Preprocesar ROI para OCR (Umbralización para dejar texto negro sobre blanco o viceversa)
+    _, roi_thresh = cv2.threshold(roi, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # Configuración de Tesseract para buscar solo dígitos
+    # psm 6: Asume un bloque de texto uniforme. psm 7: Asume una sola línea de texto.
+    custom_config = r'--oem 3 --psm 6 outputbase digits'
+    texto = pytesseract.image_to_string(roi_thresh, config=custom_config)
+
+    # Limpiar el texto para obtener solo números
+    numeros = re.findall(r'\d+', texto)
+    
+    if not numeros:
+        print("No se pudo leer el número. Intenta ajustar el preprocesamiento del ROI.")
+        # Mostrar ROI para depurar
+        cv2.imshow("ROI Texto", roi_thresh)
+        cv2.waitKey(0)
+        return
+
+    # Tomamos el número más grande encontrado (a veces detecta ruido como números pequeños)
+    medida_mm = float(max(numeros, key=lambda x: int(x)))
+    print(f"Medida leída (OCR): {medida_mm} mm")
+
+    # 6. Calcular factor de conversión
+    # Factor: Cuántos metros representa un píxel
+    mm_por_pixel = medida_mm / distancia_pixeles
+    metros_por_pixel = mm_por_pixel / 1000.0
+
+    print(f"Factor de conversión: {metros_por_pixel:.6f} metros/pixel")
