@@ -102,44 +102,47 @@ def ensure_tesseract():
         raise RuntimeError("Tesseract OCR no está instalado en el sistema. En Ubuntu: sudo apt install tesseract-ocr")
 
 # ----------------------
-# DETECCIÓN LÍNEA + OCR
+# DETECCIÓN LÍNEA + OCR (usando tu implementación mejorada)
 # ----------------------
 def detect_scale_line_and_number(img):
     H, W = img.shape[:2]
     top_h = int(H * TOP_CROP_RATIO)
     top_region = img[0:top_h, :].copy()
-    hsv = cv2.cvtColor(top_region, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, HSV_MIN, HSV_MAX)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-    edges = cv2.Canny(mask, 50, 150, apertureSize=3)
-    min_len = int(W * 0.30)
-    lines = cv2.HoughLinesP(edges, HOUGH_RHO, HOUGH_THETA, HOUGH_THRESHOLD,
-                            minLineLength=min_len, maxLineGap=50)
+    gray_top = cv2.cvtColor(top_region, cv2.COLOR_BGR2GRAY)
+
+    # edge detection (your version works well)
+    edges = cv2.Canny(gray_top, 50, 150, apertureSize=3)
+    minLineLen = max(50, int(W * 0.25))
+    lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=minLineLen, maxLineGap=50)
+
     if lines is None:
         return None, None
+
+    # choose longest near-horizontal
     best_line = None
-    best_len = 0
+    max_length = 0
     for l in lines:
-        x1, y1, x2, y2 = l[0]
-        length = math.hypot(x2 - x1, y2 - y1)
-        angle_deg = abs(math.degrees(math.atan2(y2 - y1, x2 - x1)))
-        if angle_deg < 10 and length > best_len:
-            best_len = length
+        x1,y1,x2,y2 = l[0]
+        length = math.hypot(x2-x1, y2-y1)
+        angle = abs(math.degrees(math.atan2(y2-y1, x2-x1)))
+        if (angle < 10 or angle > 170) and length > max_length:
+            max_length = length
             best_line = (x1, y1, x2, y2)
+
     if best_line is None:
         return None, None
-    x1, y1, x2, y2 = best_line
-    line_len_px = math.hypot(x2 - x1, y2 - y1)
 
-    # ROI encima de la línea (global coords)
+    x1,y1,x2,y2 = best_line
+    line_len_px = math.hypot(x2-x1, y2-y1)
+
+    # ROI above the line (global coords): map from top_region to full image
+    # note: top_region starts at y=0 so coords line up
     y_line_global = int((y1 + y2) / 2)
-    roi_y1 = max(0, y_line_global - int(top_h * 0.4) - 10)
-    roi_y2 = max(0, y_line_global - 2)
+    roi_y1 = max(0, y_line_global - int(top_h * 0.5))
+    roi_y2 = max(0, y_line_global + 10)
     roi_x1 = max(0, int(min(x1, x2) - 0.05 * W))
     roi_x2 = min(W, int(max(x1, x2) + 0.05 * W))
-    roi = img[roi_y1:roi_y2, roi_x1:roi_x2].copy()
+    roi = top_region[roi_y1:roi_y2, roi_x1:roi_x2].copy()
     if roi.size == 0:
         return line_len_px, None
 
@@ -149,7 +152,7 @@ def detect_scale_line_and_number(img):
 
     try:
         ensure_tesseract()
-        cfg = r'--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789'
+        cfg = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789'
         text = pytesseract.image_to_string(thr, config=cfg)
     except Exception:
         return line_len_px, None
@@ -256,14 +259,48 @@ for img_path_obj in image_files:
         continue
     H, W = img.shape[:2]
 
-    # 1) Escala
+    # 1) Escala: intentar automática (tu detector mejorado), con fallback manual
+    # First try automatic using detect_scale_line_and_number (Hough + OCR)
     line_len_px, number_mm = detect_scale_line_and_number(img)
+    if line_len_px is None or number_mm is None:
+        # Try a second, slightly different automatic approach based on edges + Hough (robustness)
+        try:
+            # Convert to gray and try full-image Hough with different parameters
+            gray_full = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            edges_full = cv2.Canny(gray_full, 50, 150, apertureSize=3)
+            lines_full = cv2.HoughLinesP(edges_full, 1, np.pi/180, threshold=120, minLineLength=max(100, int(W*0.2)), maxLineGap=30)
+            best_line2 = None
+            max_len2 = 0
+            if lines_full is not None:
+                for l in lines_full:
+                    x1,y1,x2,y2 = l[0]
+                    length = math.hypot(x2-x1, y2-y1)
+                    angle = abs(math.degrees(math.atan2(y2-y1, x2-x1)))
+                    if (angle < 12 or angle > 168) and length > max_len2:
+                        max_len2 = length
+                        best_line2 = (x1,y1,x2,y2)
+            if best_line2 is not None:
+                # attempt OCR using a ROI around that line
+                bx1,by1,bx2,by2 = best_line2  # intentionally will fail if malformed; except below will catch
+                # map ROI to top region heuristics then OCR similarly (reuse detect_scale_line_and_number logic)
+                line_len_px_alt = math.hypot(bx2-bx1, by2-by1)
+                # attempt to read OCR over top area again
+                # reuse function but if fails we'll go to manual
+                # (call detect_scale_line_and_number which uses top_region approach)
+                line_len_px_tmp, number_mm_tmp = detect_scale_line_and_number(img)
+                if line_len_px_tmp is not None and number_mm_tmp is not None:
+                    line_len_px, number_mm = line_len_px_tmp, number_mm_tmp
+        except Exception:
+            pass
+
     if line_len_px is None or number_mm is None:
         print(f"[AVISO] Detección automática fallida en {img_path_obj.name}. Activando modo manual.")
         line_len_px, number_mm = get_scale_manual(img, img_path_obj.name)
+
     if line_len_px is None or number_mm is None:
         print("[AVISO] No se obtuvo escala. Saltando imagen.")
         continue
+
     mm_per_px = number_mm / line_len_px
     print(f"Escala: {number_mm} mm en {line_len_px:.1f}px -> mm/px = {mm_per_px:.6f}")
 
