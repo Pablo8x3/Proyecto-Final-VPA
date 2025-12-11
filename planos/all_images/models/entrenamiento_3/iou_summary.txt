@@ -1,0 +1,22 @@
+Run: entrenamiento_3
+Date: 2025-12-11T12:54:54.286294
+Train images: 39, Val images: 11, Test images: 6
+Training time (s): 496.90
+Best weights: /home/pablo/Documents/pro_vision/planos/all_images/models/entrenamiento_3/entrenamiento_3/weights/best.pt
+
+Global mean IoU: 0.844731
+Global std IoU: 0.136280
+Total GT boxes evaluated: 43
+
+Per-class IoU:
+ - cabina (id 0): mean=0.8887236119749435 std=0.02619643149656714 count=2
+ - salon (id 1): mean=0.9208571682176803 std=0.023099799898162673 count=8
+ - vestibulo (id 2): mean=0.8263090326302095 std=0.07541248162507906 count=12
+ - wc_normal (id 3): mean=0.9031564315578453 std=0.038407461556680865 count=5
+ - bufet (id 4): mean=0.9119645077896117 std=0.0023056298688319266 count=2
+ - fuelles (id 5): mean=0.8169784882425569 std=0.06456624829510028 count=9
+ - anexo (id 6): mean=0.08118340217982324 std=0.0 count=1
+ - bicicletas (id 7): mean=None std=None count=0
+ - personal (id 8): mean=None std=None count=0
+ - wc_pmr (id 9): mean=0.8482532751091703 std=0.0 count=1
+ - corredor (id 10): mean=0.8804856759155797 std=0.043277400552246395 count=3

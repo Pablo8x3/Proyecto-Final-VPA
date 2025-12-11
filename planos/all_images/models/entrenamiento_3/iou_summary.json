@@ -1,0 +1,73 @@
+{
+  "global_mean_iou": 0.8447307961358379,
+  "global_std_iou": 0.13628010561653178,
+  "total_gt_boxes": 43,
+  "per_class": {
+    "0": {
+      "class_name": "cabina",
+      "mean_iou": 0.8887236119749435,
+      "std_iou": 0.02619643149656714,
+      "count": 2
+    },
+    "1": {
+      "class_name": "salon",
+      "mean_iou": 0.9208571682176803,
+      "std_iou": 0.023099799898162673,
+      "count": 8
+    },
+    "2": {
+      "class_name": "vestibulo",
+      "mean_iou": 0.8263090326302095,
+      "std_iou": 0.07541248162507906,
+      "count": 12
+    },
+    "3": {
+      "class_name": "wc_normal",
+      "mean_iou": 0.9031564315578453,
+      "std_iou": 0.038407461556680865,
+      "count": 5
+    },
+    "4": {
+      "class_name": "bufet",
+      "mean_iou": 0.9119645077896117,
+      "std_iou": 0.0023056298688319266,
+      "count": 2
+    },
+    "5": {
+      "class_name": "fuelles",
+      "mean_iou": 0.8169784882425569,
+      "std_iou": 0.06456624829510028,
+      "count": 9
+    },
+    "6": {
+      "class_name": "anexo",
+      "mean_iou": 0.08118340217982324,
+      "std_iou": 0.0,
+      "count": 1
+    },
+    "7": {
+      "class_name": "bicicletas",
+      "mean_iou": null,
+      "std_iou": null,
+      "count": 0
+    },
+    "8": {
+      "class_name": "personal",
+      "mean_iou": null,
+      "std_iou": null,
+      "count": 0
+    },
+    "9": {
+      "class_name": "wc_pmr",
+      "mean_iou": 0.8482532751091703,
+      "std_iou": 0.0,
+      "count": 1
+    },
+    "10": {
+      "class_name": "corredor",
+      "mean_iou": 0.8804856759155797,
+      "std_iou": 0.043277400552246395,
+      "count": 3
+    }
+  }
+}
