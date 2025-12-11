@@ -36,7 +36,7 @@ except Exception:
 # ----------------------
 MODEL_PATH = "planos/all_images/models/entrenamiento_3/entrenamiento_3/weights/best.pt"
 IMG_FOLDER = "planos/all_images/split/test/images/"
-OUTPUT_FOLDER = "planos/all_images/split/test/images/results_sensores/"
+OUTPUT_FOLDER = "outputs"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 TOP_CROP_RATIO = 0.20  # zona superior para buscar la línea
