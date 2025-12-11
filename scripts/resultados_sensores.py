@@ -31,9 +31,9 @@ except Exception:
 # ----------------------
 # CONFIGURACIÓN (ajusta)
 # ----------------------
-MODEL_PATH = "/home/pablo/Documents/pro_vision/planos/models/yolo_trenes/weights/best.pt"
-IMG_FOLDER = "/home/pablo/Documents/pro_vision/planos/comprobar_manual/images"
-OUTPUT_FOLDER = "/home/pablo/Documents/pro_vision/planos/comprobar_manual/results_final"
+MODEL_PATH = "/home/pablo/Documents/pro_vision/planos/models/yolo_trenes_better_bbox/weights/best.pt"
+IMG_FOLDER = "/home/pablo/Documents/pro_vision/planos/comprobar_manual_better_bbox/images"
+OUTPUT_FOLDER = "/home/pablo/Documents/pro_vision/planos/comprobar_manual_better_bbox/results_final"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 TOP_CROP_RATIO = 0.20  # zona superior para buscar la línea

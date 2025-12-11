@@ -6,8 +6,8 @@ from pathlib import Path
 # CONFIGURACIÓN
 # -----------------------------
 
-IMAGE_DIR = "/home/pablo/Documents/pro_vision/planos/comprobar_manual/images"
-LABEL_DIR = "/home/pablo/Documents/pro_vision/planos/comprobar_manual/labels"
+IMAGE_DIR = "/home/pablo/Documents/pro_vision/planos/all_images/images"
+LABEL_DIR = "/home/pablo/Documents/pro_vision/planos/all_images/labels"
 
 CLASSES = [
     "cabina","salon","vestibulo","wc_normal","bufet","fuelles",
