@@ -13,11 +13,11 @@ pandas>=1.5.0               # Análisis y manipulación de datos
 pyyaml>=6.0                 # Parseo de archivos YAML
 
 # OCR & Text Detection
-pytesseract>=0.3.10         # Interface Python para Tesseract OCR
+easyocr>=1.7.0              # EasyOCR - detección de texto con IA
 
 # Visualization & Output
 matplotlib>=3.7.0           # Gráficos y visualización
-openpyxl>=3.10.0            # Lectura/escritura de Excel
+openpyxl            # Lectura/escritura de Excel
 
 # Utilities
 Pillow>=9.0.0               # Procesamiento de imágenes (PIL)

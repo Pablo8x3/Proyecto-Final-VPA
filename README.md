@@ -11,44 +11,101 @@ Este proyecto utiliza YOLOv8 para detectar y analizar diferentes zonas en imáge
 
 ## 🚀 Requisitos Previos
 
-### Instalación Base
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get update
-sudo apt-get install python3 python3-pip tesseract-ocr
-```
-
-**macOS:**
-```bash
-brew install python3 tesseract
-```
-
-**Windows:** Descargar Python desde https://www.python.org/ e instalar Tesseract desde https://github.com/UB-Mannheim/tesseract/wiki
-
 ### Requisitos del Sistema
 - Python 3.8+
 - pip
-- Tesseract OCR (para detección automática de escala)
 
-## 📦 Instalación Rápida
+## 📦 Instalación
 
-```bash
-# 1. Clonar repositorio
+### Windows
+
+1. **Abre PowerShell como Administrador**
+   - Busca "PowerShell" en el menú de inicio
+   - Haz clic derecho y selecciona "Ejecutar como administrador"
+
+2. **Crea una carpeta para el proyecto**
+   - Crea una carpeta en tu escritorio o donde prefieras (ej: `VPA`)
+   - Copia la ruta completa de la carpeta (ej: `C:\Users\TuUsuario\Desktop\VPA`)
+
+3. **Navega a esa carpeta en PowerShell**
+
+```powershell
+cd C:\Users\TuUsuario\Desktop\VPA
+```
+
+4. **Descarga el proyecto** (si aún no lo has hecho)
+
+```powershell
 git clone https://github.com/Pablo8x3/Proyecto-FInal-VPA.git
 cd Proyecto-FInal-VPA
+```
 
-# 2. Crear entorno virtual
-python3 -m venv venv
-# Linux/macOS
-source venv/bin/activate          
-# o en Windows:
+5. **Crea el entorno virtual**
+
+```powershell
+python -m venv venv
+```
+
+6. **Activa el entorno virtual**
+
+```powershell
 venv\Scripts\activate
+```
 
-# 3. Instalar dependencias
+7. **Instala las dependencias**
+
+```powershell
 pip install --upgrade pip
+```
+
+```powershell
 pip install -r requirements.txt
 ```
+
+8. **EasyOCR descargará los modelos automáticamente** en el primer uso (descarga ~200MB)
+
+---
+
+### Linux / macOS
+
+1. **Abre una terminal**
+
+2. **Navega a la carpeta del proyecto**
+
+```bash
+cd ~/tu_carpeta_del_proyecto
+```
+
+3. **Descarga el proyecto** (si aún no lo has hecho)
+
+```bash
+git clone https://github.com/Pablo8x3/Proyecto-FInal-VPA.git
+cd Proyecto-FInal-VPA
+```
+
+4. **Crea el entorno virtual**
+
+```bash
+python3 -m venv venv
+```
+
+5. **Activa el entorno virtual**
+
+```bash
+source venv/bin/activate
+```
+
+6. **Instala las dependencias**
+
+```bash
+pip install --upgrade pip
+```
+
+```bash
+pip install -r requirements.txt
+```
+
+7. **EasyOCR descargará los modelos automáticamente** en el primer uso (descarga ~200MB)
 
 ## 🎯 Uso
 
@@ -156,24 +213,16 @@ pro_vision/
 ### Error: "ModuleNotFoundError: No module named 'ultralytics'"
 
 ```bash
-# Reinstala dependencias
 pip install -r requirements.txt
 ```
 
-### Error: "Tesseract is not installed"
+### Error: "EasyOCR no funciona" o "OCR Error"
 
-**Linux:**
-```bash
-sudo apt-get install tesseract-ocr
-```
+EasyOCR descargarará automáticamente los modelos necesarios en el primer uso. Si hay problemas:
 
-**macOS:**
-```bash
-brew install tesseract
-```
-
-**Windows:**
-Descarga e instala desde: https://github.com/UB-Mannheim/tesseract/wiki
+- Asegúrate de tener **conexión a internet** en el primer uso
+- Los modelos se guardan en `~/.EasyOCR/model/` (carpeta del usuario)
+- Si los modelos están corruptos, borra esa carpeta y vuelve a intentar
 
 ### El PDF sale vacío o sin sensores
 

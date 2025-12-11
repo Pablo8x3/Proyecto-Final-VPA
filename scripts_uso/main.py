@@ -7,8 +7,7 @@
 # Genera un PDF multipágina por imagen: cada página muestra LOS BBOXES y solo los sensores
 # de un tipo (AT, AT_standing, RH, CO2, TS_Fl).
 #
-# Requisitos: pip install ultralytics opencv-python numpy pandas matplotlib openpyxl pytesseract
-# Además: tesseract OCR en sistema (ej. Ubuntu: sudo apt install tesseract-ocr)
+# Requisitos: pip install ultralytics opencv-python numpy pandas matplotlib openpyxl easyocr
 #
 # AJUSTA las rutas al inicio si hace falta.
 
@@ -25,11 +24,9 @@ from matplotlib.lines import Line2D
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
 
-# OCR
-try:
-    import pytesseract
-except Exception:
-    pytesseract = None
+# OCR con EasyOCR
+import easyocr
+ocr_reader = None  # Inicializar lazily
 
 # ----------------------
 # CONFIGURACIÓN (ajusta)
@@ -98,13 +95,12 @@ def m_to_px(meters, mm_per_px):
     mm = meters * 1000.0
     return int(round(mm / mm_per_px))
 
-def ensure_tesseract():
-    if pytesseract is None:
-        raise RuntimeError("pytesseract no está instalado. pip install pytesseract")
-    try:
-        _ = pytesseract.get_tesseract_version()
-    except Exception:
-        raise RuntimeError("Tesseract OCR no está instalado en el sistema. En Ubuntu: sudo apt install tesseract-ocr")
+def get_ocr_reader():
+    global ocr_reader
+    if ocr_reader is None:
+        print("[OCR] Inicializando EasyOCR (primera vez, descarga modelos...)")
+        ocr_reader = easyocr.Reader(['en'], gpu=False)
+    return ocr_reader
 
 # ----------------------
 # DETECCIÓN LÍNEA + OCR
@@ -152,10 +148,16 @@ def detect_scale_line_and_number(img):
     _, thr = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     try:
-        ensure_tesseract()
-        cfg = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789'
-        text = pytesseract.image_to_string(thr, config=cfg)
-    except Exception:
+        reader = get_ocr_reader()
+        # EasyOCR retorna lista de tuplas: (text, confidence, bbox)
+        results = reader.readtext(thr, detail=True)
+        if not results:
+            return line_len_px, None
+        
+        # Extraer texto de los resultados
+        text = ' '.join([detection[1] for detection in results])
+    except Exception as e:
+        print(f"[DEBUG OCR] Error en easyocr: {e}")
         return line_len_px, None
 
     digits = re.findall(r'\d+', text)
