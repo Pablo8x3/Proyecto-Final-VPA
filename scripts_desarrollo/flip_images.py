@@ -5,8 +5,8 @@ import cv2
 # -----------------------------
 # CONFIGURE YOUR DIRECTORIES
 # -----------------------------
-img_dir = Path("/home/pablo/Documents/pro_vision/planos/all_images/images")
-lbl_dir = Path("/home/pablo/Documents/pro_vision/planos/all_images/labels")
+img_dir = Path("planos/all_images/images")
+lbl_dir = Path("planos/all_images/labels")
 
 out_img_dir = img_dir#  / "augmented"
 out_lbl_dir = lbl_dir#  / "augmented"

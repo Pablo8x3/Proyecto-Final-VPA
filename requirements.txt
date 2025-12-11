@@ -1,0 +1,28 @@
+# Proyecto de Detección de Zonas en Trenes - YOLOv8
+# Dependencias del proyecto
+
+# Core Deep Learning & Computer Vision
+ultralytics>=8.0.0          # YOLOv8 - modelo de detección
+opencv-python>=4.8.0        # OpenCV - procesamiento de imágenes
+torch>=2.0.0                # PyTorch - framework de deep learning
+torchvision>=0.15.0         # Visión por computadora con PyTorch
+
+# Data Processing & Analysis
+numpy>=1.23.0               # Computación numérica
+pandas>=1.5.0               # Análisis y manipulación de datos
+pyyaml>=6.0                 # Parseo de archivos YAML
+
+# OCR & Text Detection
+pytesseract>=0.3.10         # Interface Python para Tesseract OCR
+
+# Visualization & Output
+matplotlib>=3.7.0           # Gráficos y visualización
+openpyxl>=3.10.0            # Lectura/escritura de Excel
+
+# Utilities
+Pillow>=9.0.0               # Procesamiento de imágenes (PIL)
+scikit-image>=0.20.0        # Algoritmos de procesamiento de imágenes
+
+# Development (opcional)
+# jupyter>=1.0.0             # Notebooks Jupyter (opcional)
+# ipython>=8.0.0             # IPython shell mejorado (opcional)

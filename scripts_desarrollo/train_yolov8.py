@@ -35,7 +35,7 @@ import cv2
 # -----------------------
 # CONFIGURACIÓN (ajusta)
 # -----------------------
-BASE_DIR = Path("/home/pablo/Documents/pro_vision/planos")
+BASE_DIR = Path("planos")
 PLANOS_DIR = BASE_DIR / "all_images"
 
 # INPUT dataset (user: images + labels folders)

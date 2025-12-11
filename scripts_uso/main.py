@@ -34,9 +34,9 @@ except Exception:
 # ----------------------
 # CONFIGURACIÓN (ajusta)
 # ----------------------
-MODEL_PATH = "/home/pablo/Documents/pro_vision/planos/all_images/models/entrenamiento_3/entrenamiento_3/weights/best.pt"
-IMG_FOLDER = "/home/pablo/Documents/pro_vision/planos/all_images/split/test/images/"
-OUTPUT_FOLDER = "/home/pablo/Documents/pro_vision/planos/all_images/split/test/images/results_sensores/"
+MODEL_PATH = "planos/all_images/models/entrenamiento_3/entrenamiento_3/weights/best.pt"
+IMG_FOLDER = "planos/all_images/split/test/images/"
+OUTPUT_FOLDER = "planos/all_images/split/test/images/results_sensores/"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 TOP_CROP_RATIO = 0.20  # zona superior para buscar la línea

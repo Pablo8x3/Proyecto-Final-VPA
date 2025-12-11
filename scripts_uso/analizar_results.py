@@ -33,22 +33,22 @@ from datetime import datetime
 # ---------------------------------------------------------
 
 # Modelo YOLO a analizar (.pt)
-MODEL_PT = Path("/home/pablo/Documents/pro_vision/planos/models/yolo_trenes/weights/best.pt")
+MODEL_PT = Path("planos/models/yolo_trenes/weights/best.pt")
 
 # Directorios split (o los que quieras analizar)
-TRAIN_IMAGES = Path("/home/pablo/Documents/pro_vision/planos/train/images")
-VAL_IMAGES   = Path("/home/pablo/Documents/pro_vision/planos/val/images")
-TEST_IMAGES  = Path("/home/pablo/Documents/pro_vision/planos/comprobar_manual/images/")
+TRAIN_IMAGES = Path("planos/train/images")
+VAL_IMAGES   = Path("planos/val/images")
+TEST_IMAGES  = Path("planos/comprobar_manual/images/")
 
-TRAIN_LABELS = Path("/home/pablo/Documents/pro_vision/planos/train/labels")
-VAL_LABELS   = Path("/home/pablo/Documents/pro_vision/planos/val/labels/")
-TEST_LABELS  = Path("/home/pablo/Documents/pro_vision/planos/comprobar_manual/labels/")
+TRAIN_LABELS = Path("planos/train/labels")
+VAL_LABELS   = Path("planos/val/labels/")
+TEST_LABELS  = Path("planos/comprobar_manual/labels/")
 
 # YAML con la lista de clases
-NAMES_YAML = Path("/home/pablo/Documents/pro_vision/planos/data_trenes.yaml")
+NAMES_YAML = Path("planos/data_trenes.yaml")
 
 # Carpeta donde se guardarán los informes de análisis
-OUTPUT_DIR = Path("/home/pablo/Documents/pro_vision/planos/models/yolo_trenes/results")
+OUTPUT_DIR = Path("planos/models/yolo_trenes/results")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------

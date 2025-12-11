@@ -8,9 +8,9 @@ from ultralytics import YOLO
 # ----------------------
 # Configuración
 # ----------------------
-model_path = "/home/pablo/Documents/pro_vision/planos/models/yolo_trenes/weights/best.pt"  # ruta al modelo entrenado
-img_folder = "/home/pablo/Documents/pro_vision/planos/comprobar_manual/images"                           # carpeta de imágenes a probar
-output_folder = "/home/pablo/Documents/pro_vision/planos/comprobar_manual/results"                           # carpeta donde se guardan resultados
+model_path = "planos/models/yolo_trenes/weights/best.pt"  # ruta al modelo entrenado
+img_folder = "planos/comprobar_manual/images"                           # carpeta de imágenes a probar
+output_folder = "planos/comprobar_manual/results"                           # carpeta donde se guardan resultados
 os.makedirs(output_folder, exist_ok=True)
 
 # Clases y colores (RGBA)
