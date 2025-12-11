@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-# scripts/test_yolov8_full_final.py
+# scripts/test_yolov8_full_final_pdf.py
 # Integrado: detección escala automática (línea + OCR) con fallback manual (dos clicks),
 # inferencia YOLOv8, cada bbox = zona, subdivisión de comfort zones en 1/2/3 subzonas,
 # sensores colocados geométricamente (seated: two sets on diagonal @ 0.25 & 0.75,
 # standing/RH/CO2/floor: centroid of subzone).
+# Genera un PDF multipágina por imagen: cada página muestra LOS BBOXES y solo los sensores
+# de un tipo (AT, AT_standing, RH, CO2, TS_Fl).
 #
 # Requisitos: pip install ultralytics opencv-python numpy pandas matplotlib openpyxl pytesseract
 # Además: tesseract OCR en sistema (ej. Ubuntu: sudo apt install tesseract-ocr)
@@ -20,6 +22,7 @@ from ultralytics import YOLO
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.backends.backend_pdf import PdfPages
 import sys
 
 # OCR
@@ -82,6 +85,8 @@ MARKER_COLORS = {
     "TS_Fl": "green"
 }
 
+SENSOR_TYPES_ORDER = ["AT", "AT_standing", "RH", "CO2", "TS_Fl"]
+
 # ----------------------
 # UTIL
 # ----------------------
@@ -102,7 +107,7 @@ def ensure_tesseract():
         raise RuntimeError("Tesseract OCR no está instalado en el sistema. En Ubuntu: sudo apt install tesseract-ocr")
 
 # ----------------------
-# DETECCIÓN LÍNEA + OCR (usando tu implementación mejorada)
+# DETECCIÓN LÍNEA + OCR
 # ----------------------
 def detect_scale_line_and_number(img):
     H, W = img.shape[:2]
@@ -110,7 +115,6 @@ def detect_scale_line_and_number(img):
     top_region = img[0:top_h, :].copy()
     gray_top = cv2.cvtColor(top_region, cv2.COLOR_BGR2GRAY)
 
-    # edge detection (your version works well)
     edges = cv2.Canny(gray_top, 50, 150, apertureSize=3)
     minLineLen = max(50, int(W * 0.25))
     lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=minLineLen, maxLineGap=50)
@@ -118,7 +122,6 @@ def detect_scale_line_and_number(img):
     if lines is None:
         return None, None
 
-    # choose longest near-horizontal
     best_line = None
     max_length = 0
     for l in lines:
@@ -135,8 +138,6 @@ def detect_scale_line_and_number(img):
     x1,y1,x2,y2 = best_line
     line_len_px = math.hypot(x2-x1, y2-y1)
 
-    # ROI above the line (global coords): map from top_region to full image
-    # note: top_region starts at y=0 so coords line up
     y_line_global = int((y1 + y2) / 2)
     roi_y1 = max(0, y_line_global - int(top_h * 0.5))
     roi_y2 = max(0, y_line_global + 10)
@@ -218,7 +219,6 @@ def get_center_of_subzone(sub_left_px, sub_right_px, y1, y2):
     return cx, cy
 
 def get_diagonal_point(sub_left_px, sub_right_px, y1, y2, t):
-    # diagonal bottom-left -> top-right
     x_start, y_start = sub_left_px, y2
     x_end, y_end = sub_right_px, y1
     x = x_start + t * (x_end - x_start)
@@ -260,12 +260,9 @@ for img_path_obj in image_files:
     H, W = img.shape[:2]
 
     # 1) Escala: intentar automática (tu detector mejorado), con fallback manual
-    # First try automatic using detect_scale_line_and_number (Hough + OCR)
     line_len_px, number_mm = detect_scale_line_and_number(img)
     if line_len_px is None or number_mm is None:
-        # Try a second, slightly different automatic approach based on edges + Hough (robustness)
         try:
-            # Convert to gray and try full-image Hough with different parameters
             gray_full = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             edges_full = cv2.Canny(gray_full, 50, 150, apertureSize=3)
             lines_full = cv2.HoughLinesP(edges_full, 1, np.pi/180, threshold=120, minLineLength=max(100, int(W*0.2)), maxLineGap=30)
@@ -280,13 +277,6 @@ for img_path_obj in image_files:
                         max_len2 = length
                         best_line2 = (x1,y1,x2,y2)
             if best_line2 is not None:
-                # attempt OCR using a ROI around that line
-                bx1,by1,bx2,by2 = best_line2  # intentionally will fail if malformed; except below will catch
-                # map ROI to top region heuristics then OCR similarly (reuse detect_scale_line_and_number logic)
-                line_len_px_alt = math.hypot(bx2-bx1, by2-by1)
-                # attempt to read OCR over top area again
-                # reuse function but if fails we'll go to manual
-                # (call detect_scale_line_and_number which uses top_region approach)
                 line_len_px_tmp, number_mm_tmp = detect_scale_line_and_number(img)
                 if line_len_px_tmp is not None and number_mm_tmp is not None:
                     line_len_px, number_mm = line_len_px_tmp, number_mm_tmp
@@ -454,6 +444,7 @@ for img_path_obj in image_files:
             zone_counter += 1
 
     # 4) Guardar Excel (x_m, y_m, height_m)
+    excel_path = None
     if sensors_list:
         df = pd.DataFrame(sensors_list)
         excel_path = Path(OUTPUT_FOLDER) / f"{img_path_obj.stem}_sensors.xlsx"
@@ -467,7 +458,7 @@ for img_path_obj in image_files:
         df_out.to_excel(excel_path, index=False)
         print("Excel guardado en:", excel_path)
 
-    # 5) Dibujo: respetar bboxes y marcar sensors on-plane
+    # 5) Dibujo: respetar bboxes y preparar PDF multipágina
     img_vis = img.copy()
     # draw bboxes filled
     for (bx1, by1, bx2, by2, bcls, bconf) in boxes_px:
@@ -478,11 +469,8 @@ for img_path_obj in image_files:
         cv2.putText(img_vis, f"{bcls} {bconf:.2f}", (int(bx1), int(by1)-6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0,0,0), 2)
 
-    fig, ax = plt.subplots(figsize=(W/100, H/100), dpi=100)
-    ax.imshow(cv2.cvtColor(img_vis, cv2.COLOR_BGR2RGB))
-    ax.axis('off')
-
-    # draw subzone separators (dashed) inside bboxes for comfort
+    # draw subzone separators (we will also replicate them in each PDF page)
+    separators = []
     for (bx1, by1, bx2, by2, bcls, bconf) in boxes_px:
         if bcls in ("salon", "bufet"):
             bbox_w_px = bx2 - bx1
@@ -499,29 +487,56 @@ for img_path_obj in image_files:
                 color_rgb = np.array(CLASS_COLORS.get(bcls, (120,120,120,0.25))[:3]) / 255.0
                 for s in range(1, n_sub):
                     xline = bx1 + s * sub_w_px
-                    ax.add_line(Line2D([xline, xline], [by1, by2], linestyle=(0, (5,5)), color=color_rgb, linewidth=2))
+                    separators.append((xline, by1, by2, color_rgb))
 
-    # plot sensors at (x_px, y_px)
-    for s in sensors_list:
-        x_px = s.get("x_px", None)
-        y_px = s.get("y_px", None)
-        if x_px is None or y_px is None:
-            # fallback compute from x_m,y_m
-            x_px = global_xmin + (s["x_m"] * 1000.0) / mm_per_px
-            y_px = global_ymin + (s["y_m"] * 1000.0) / mm_per_px
-        color = MARKER_COLORS.get(s["type"].split('_')[0], "white")
-        ax.plot(x_px, y_px, marker='*', markersize=10, color=color)
-        ax.text(x_px + 3, y_px + 3, s["name"], color='white', fontsize=7)
-
-    legend_handles = [Line2D([0],[0], marker='*', color='w', label=k, markerfacecolor=v, markersize=10)
-                      for k, v in MARKER_COLORS.items()]
-    ax.legend(handles=legend_handles, loc='lower right', fontsize='small')
-
-    pdf_path = Path(OUTPUT_FOLDER) / f"{img_path_obj.stem}_annotated.pdf"
+    # Save annotated image (single image file)
     img_out_path = Path(OUTPUT_FOLDER) / f"{img_path_obj.stem}_annotated.jpg"
-    fig.savefig(str(pdf_path), bbox_inches='tight', dpi=200)
-    plt.close(fig)
     cv2.imwrite(str(img_out_path), img_vis)
+
+    # === PDF multipágina: una página por tipo de sensor, con bboxes siempre visibles ===
+    pdf_path = Path(OUTPUT_FOLDER) / f"{img_path_obj.stem}_annotated.pdf"
+    with PdfPages(str(pdf_path)) as pdf:
+        for sensor_type in SENSOR_TYPES_ORDER:
+            fig, ax = plt.subplots(figsize=(W/100, H/100), dpi=100)
+            # show image with bboxes
+            ax.imshow(cv2.cvtColor(img_vis, cv2.COLOR_BGR2RGB))
+            ax.axis('off')
+            ax.set_title(f"{img_path_obj.stem} - Sensores: {sensor_type}", fontsize=10)
+
+            # draw separators (dashed) on top
+            for (xline, by1, by2, color_rgb) in separators:
+                ax.add_line(Line2D([xline, xline], [by1, by2], linestyle=(0,(5,5)), color=color_rgb, linewidth=2))
+
+            # Draw only sensors of the current type
+            for s in sensors_list:
+                stype = s["type"]
+                # compare base type (e.g., 'AT' for 'AT' and 'AT_standing' startswith 'AT_standing')
+                # we want exact match for 'AT' and 'AT_standing' separately
+                if stype != sensor_type:
+                    continue
+                x_px = s.get("x_px")
+                y_px = s.get("y_px")
+                if x_px is None or y_px is None:
+                    # fallback compute from x_m,y_m
+                    if "x_m" in s:
+                        x_px = global_xmin + (s["x_m"] * 1000.0) / mm_per_px
+                    else:
+                        continue
+                    if "y_m" in s:
+                        y_px = global_ymin + (s["y_m"] * 1000.0) / mm_per_px
+                    else:
+                        continue
+
+                color = MARKER_COLORS.get(sensor_type, "white")
+                ax.plot(x_px, y_px, marker='*', markersize=10, color=color)
+                ax.text(x_px + 3, y_px + 3, s["name"], color='white', fontsize=7)
+
+            # legend: single-line legend showing types (visual aid)
+            legend_handles = [Line2D([0],[0], marker='*', color='w', label=k, markerfacecolor=v, markersize=8) for k,v in MARKER_COLORS.items()]
+            ax.legend(handles=legend_handles, loc='lower right', fontsize='small')
+
+            pdf.savefig(fig, bbox_inches='tight', dpi=200)
+            plt.close(fig)
 
     # 6) Guardar detecciones .txt (YOLO normalized)
     dets_txt = Path(OUTPUT_FOLDER) / f"{img_path_obj.stem}.txt"

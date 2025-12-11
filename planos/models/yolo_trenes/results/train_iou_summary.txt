@@ -1,0 +1,20 @@
+Split: train
+Date: 2025-12-11T15:46:04.968707
+
+Images: 17
+Global mean IoU: 0.84007
+Std: 0.14025
+Total GT boxes: 140
+
+Per-class IoU:
+  - cabina (id 0): mean=0.6845782473473946 std=0.3333989277743975 count=6
+  - salon (id 1): mean=0.9198953056456086 std=0.06570018108543263 count=33
+  - vestibulo (id 2): mean=0.8868342759545558 std=0.07641952180138038 count=20
+  - wc_normal (id 3): mean=0.89089247277485 std=0.036145942647726616 count=11
+  - bufet (id 4): mean=0.8666987903325447 std=0.06435970548918235 count=2
+  - fuelles (id 5): mean=0.8036624461386346 std=0.09882653448373953 count=26
+  - anexo (id 6): mean=0.773806257795947 std=0.17177513666390215 count=27
+  - bicicletas (id 7): mean=0.794616666073371 std=0.09392209283260462 count=6
+  - personal (id 8): mean=0.7863988674610565 std=0.1280001931098673 count=4
+  - wc_pmr (id 9): mean=0.8348617690690266 std=0.07742759319552489 count=5
+  - corredor (id 10): mean=None std=None count=0

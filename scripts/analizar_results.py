@@ -1,139 +1,245 @@
+#!/usr/bin/env python3
 """
-scripts/evaluate_yolov8_visual.py
+analysis_yolov8_internal.py
 
-Evalúa un modelo YOLOv8 entrenado sobre un conjunto de validación:
-- Calcula IoU y RMSE por imagen.
-- Genera gráfica de RMSE por imagen.
-- Crea imágenes con bboxes predichas vs ground truth.
+Script autónomo para analizar un modelo YOLO ya entrenado usando IoU.
+No usa parámetros por terminal: TODAS LAS RUTAS SE DEFINEN AQUÍ DENTRO.
+
+Qué hace:
+  - Carga best.pt o cualquier modelo YOLOv8
+  - Evalúa IoU sobre train / val / test
+  - Genera por split:
+        * iou_per_image.csv
+        * iou_per_class.csv
+        * iou_summary.json
+        * iou_summary.txt
+  - Guarda todo en una carpeta de resultados
+
+Requisitos:
+    pip install ultralytics numpy pandas opencv-python pyyaml
 """
 
-import cv2
+import os
+import json
+import yaml
 import numpy as np
+import pandas as pd
+import cv2
 from pathlib import Path
-import matplotlib.pyplot as plt
+from datetime import datetime
 
-# -----------------------------
-# Rutas a ajustar
-# -----------------------------
-MODEL_PATH = "/home/pablo/Documents/pro_vision/planos/models/yolo_trenes_better_bbox/weights/best.pt"
-VAL_DIR =           "/home/pablo/Documents/pro_vision/planos/val/images"
-VAL_LABELS_DIR =    "/home/pablo/Documents/pro_vision/planos/val/labels"
-OUTPUT_DIR = "/home/pablo/Documents/pro_vision/planos/val/output_results"  # donde guardar imágenes de salida
-IOU_THRESHOLD = 0.2  # para considerar acierto
+# ---------------------------------------------------------
+# ---------------- CONFIGURACIÓN DEL USUARIO --------------
+# ---------------------------------------------------------
 
-def load_yolo_labels(txt_file, w, h):
+# Modelo YOLO a analizar (.pt)
+MODEL_PT = Path("/home/pablo/Documents/pro_vision/planos/models/yolo_trenes/weights/best.pt")
+
+# Directorios split (o los que quieras analizar)
+TRAIN_IMAGES = Path("/home/pablo/Documents/pro_vision/planos/train/images")
+VAL_IMAGES   = Path("/home/pablo/Documents/pro_vision/planos/val/images")
+TEST_IMAGES  = Path("/home/pablo/Documents/pro_vision/planos/comprobar_manual/images/")
+
+TRAIN_LABELS = Path("/home/pablo/Documents/pro_vision/planos/train/labels")
+VAL_LABELS   = Path("/home/pablo/Documents/pro_vision/planos/val/labels/")
+TEST_LABELS  = Path("/home/pablo/Documents/pro_vision/planos/comprobar_manual/labels/")
+
+# YAML con la lista de clases
+NAMES_YAML = Path("/home/pablo/Documents/pro_vision/planos/data_trenes.yaml")
+
+# Carpeta donde se guardarán los informes de análisis
+OUTPUT_DIR = Path("/home/pablo/Documents/pro_vision/planos/models/yolo_trenes/results")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# ---------------------------------------------------------
+# ---------------- FUNCIONES AUXILIARES -------------------
+# ---------------------------------------------------------
+
+def list_images(folder):
+    exts = {".jpg", ".jpeg", ".png", ".bmp", ".png"}
+    return sorted([p for p in Path(folder).glob("*") if p.suffix.lower() in exts])
+
+
+def normalize_box_coords(x1, y1, x2, y2):
+    if x1 > x2:
+        x1, x2 = x2, x1
+    if y1 > y2:
+        y1, y2 = y2, y1
+    return int(x1), int(y1), int(x2), int(y2)
+
+
+def read_yolo_txt_as_boxes(txt_path, img_w, img_h):
+    """ Devuelve lista de [x1,y1,x2,y2,cls] """
     boxes = []
-    txt_path = Path(txt_file)
+    txt_path = Path(txt_path)
+
     if not txt_path.exists():
         return boxes
+
     with open(txt_path, "r") as f:
-        for line in f.readlines():
-            cls, xc, yc, bw, bh = map(float, line.split())
-            x1 = int((xc - bw/2) * w)
-            y1 = int((yc - bh/2) * h)
-            x2 = int((xc + bw/2) * w)
-            y2 = int((yc + bh/2) * h)
-            boxes.append([int(cls), x1, y1, x2, y2])
+        for line in f:
+            p = line.strip().split()
+            if len(p) < 5:
+                continue
+            cls = int(float(p[0]))
+            xc, yc, bw, bh = map(float, p[1:])
+            x1 = (xc - bw/2.0) * img_w
+            x2 = (xc + bw/2.0) * img_w
+            y1 = (yc - bh/2.0) * img_h
+            y2 = (yc + bh/2.0) * img_h
+            x1, y1, x2, y2 = normalize_box_coords(x1, y1, x2, y2)
+            boxes.append([x1, y1, x2, y2, cls])
     return boxes
 
-def iou(box1, box2):
-    x1 = max(box1[0], box2[0])
-    y1 = max(box1[1], box2[1])
-    x2 = min(box1[2], box2[2])
-    y2 = min(box1[3], box2[3])
-    inter_area = max(0, x2 - x1) * max(0, y2 - y1)
-    box1_area = (box1[2]-box1[0])*(box1[3]-box1[1])
-    box2_area = (box2[2]-box2[0])*(box2[3]-box2[1])
-    union_area = box1_area + box2_area - inter_area
-    return inter_area / union_area if union_area != 0 else 0.0
 
-def compute_iou_rmse(pred_boxes, gt_boxes):
-    ious = []
-    for pb, gb in zip(pred_boxes, gt_boxes):
-        ious.append(iou(pb[1:], gb[1:]))
-    ious = np.array(ious)
-    rmse = np.sqrt(np.mean((1-ious)**2))
-    return rmse, ious
+def compute_iou(boxA, boxB):
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
 
-def draw_boxes_translucid(img, pred_boxes, gt_boxes, ious, iou_threshold=IOU_THRESHOLD):
-    out = img.copy()
-    overlay = out.copy()
+    interW = max(0, xB - xA)
+    interH = max(0, yB - yA)
+    interArea = interW * interH
 
-    for idx, (pb, gb) in enumerate(zip(pred_boxes, gt_boxes)):
-        # Color según acierto/fallo
-        color_fill = (0,255,0) if ious[idx] >= iou_threshold else (0,0,255)
-        color_border = (0,200,0) if ious[idx] >= iou_threshold else (0,0,200)
+    areaA = max(0, (boxA[2]-boxA[0])) * max(0, (boxA[3]-boxA[1]))
+    areaB = max(0, (boxB[2]-boxB[0])) * max(0, (boxB[3]-boxB[1]))
 
-        # Área de intersección
-        x1 = max(pb[1], gb[1])
-        y1 = max(pb[2], gb[2])
-        x2 = min(pb[3], gb[3])
-        y2 = min(pb[4], gb[4])
+    union = areaA + areaB - interArea
+    if union <= 0:
+        return 0.0
+    return interArea / union
 
-        # Dibujar bbox predicha y GT borde más saturado
-        cv2.rectangle(out, (pb[1], pb[2]), (pb[3], pb[4]), color_border, 2)
-        cv2.rectangle(out, (gb[1], gb[2]), (gb[3], gb[4]), (255,0,0), 1)
+# ---------------------------------------------------------
+# ---------------------- EVALUACIÓN -----------------------
+# ---------------------------------------------------------
 
-        # Dibujar relleno semitransparente en la intersección
-        if x2 > x1 and y2 > y1:
-            alpha = 0.4
-            cv2.rectangle(overlay, (x1, y1), (x2, y2), color_fill, -1)
-            cv2.addWeighted(overlay, alpha, out, 1 - alpha, 0, out)
-
-    return out
-
-def evaluate_model_visual(model_path, val_dir, val_labels_dir, output_dir):
+def evaluate_model(model_path, images, labels_dir, names_list):
     from ultralytics import YOLO
-    model = YOLO(model_path)
-    val_images = sorted(Path(val_dir).glob("*.jpg"))
-    all_rmse = []
-    image_names = []
 
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"\n[INFO] Cargando modelo {model_path}")
+    model = YOLO(str(model_path))
 
-    for img_path in val_images:
-        img_cv = cv2.imread(str(img_path))
-        h, w = img_cv.shape[:2]
+    per_image_rows = []
+    per_class_ious = {i: [] for i in range(len(names_list))}
+    all_ious = []
 
-        results = model.predict(str(img_path), imgsz=640, conf=0.25)
-        pred_boxes = []
+    for img_path in images:
+        img = cv2.imread(str(img_path))
+        if img is None:
+            continue
+        H, W = img.shape[:2]
+
+        gt_boxes = read_yolo_txt_as_boxes(labels_dir / f"{img_path.stem}.txt", W, H)
+
+        results = model.predict(str(img_path), conf=0.001, iou=0.5, verbose=False)
+
+        preds = []
         for r in results:
-            for box in r.boxes:
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                cls = int(box.cls[0].cpu().numpy())
-                pred_boxes.append([cls, int(x1), int(y1), int(x2), int(y2)])
+            if hasattr(r, "boxes") and r.boxes is not None:
+                for b, c in zip(r.boxes.xyxy, r.boxes.cls):
+                    x1, y1, x2, y2 = map(float, b.tolist())
+                    preds.append([int(x1), int(y1), int(x2), int(y2), int(c)])
 
-        gt_path = Path(val_labels_dir) / (img_path.stem + ".txt")
-        gt_boxes = load_yolo_labels(gt_path, w, h)
+        # IoU por imagen
+        ious_img = []
+        for gt in gt_boxes:
+            gt_box = gt[:4]
+            best = 0.0
+            for pr in preds:
+                best = max(best, compute_iou(gt_box, pr[:4]))
+            ious_img.append(best)
+            all_ious.append(best)
+            per_class_ious[gt[4]].append(best)
 
-        if pred_boxes and gt_boxes:
-            rmse, ious = compute_iou_rmse(pred_boxes, gt_boxes)
-            all_rmse.append(rmse)
-            image_names.append(img_path.name)
-            print(f"{img_path.name} - RMSE IoU: {rmse:.4f}")
+        per_image_rows.append({
+            "image": img_path.name,
+            "n_gt": len(gt_boxes),
+            "n_pred": len(preds),
+            "mean_iou": float(np.mean(ious_img)) if ious_img else 0.0,
+            "min_iou": float(np.min(ious_img)) if ious_img else 0.0,
+            "max_iou": float(np.max(ious_img)) if ious_img else 0.0
+        })
 
-            out_img = draw_boxes_translucid(img_cv, pred_boxes, gt_boxes, ious)
-            out_path = output_dir / f"{img_path.stem}_compare.jpg"
-            cv2.imwrite(str(out_path), out_img)
-        else:
-            print(f"{img_path.name} - Sin bboxes para comparar")
+    # Resumen por clase
+    per_class_summary = {}
+    for cls_id, vals in per_class_ious.items():
+        per_class_summary[cls_id] = {
+            "class_name": names_list[cls_id],
+            "mean_iou": float(np.mean(vals)) if vals else None,
+            "std_iou": float(np.std(vals)) if vals else None,
+            "count": len(vals)
+        }
 
-    # Gráfica RMSE
-    if all_rmse:
-        total_rmse = np.mean(all_rmse)
-        print(f"\nRMSE IoU total de validación: {total_rmse:.4f}")
+    summary = {
+        "global_mean_iou": float(np.mean(all_ious)) if all_ious else 0.0,
+        "global_std_iou": float(np.std(all_ious)) if all_ious else 0.0,
+        "total_gt_boxes": len(all_ious),
+        "per_class": per_class_summary
+    }
 
-        plt.figure(figsize=(10,5))
-        plt.bar(image_names, all_rmse, color='skyblue')
-        plt.xticks(rotation=45, ha='right')
-        plt.ylabel("RMSE IoU")
-        plt.title("RMSE IoU por imagen")
-        plt.tight_layout()
-        plt.savefig(output_dir / "rmse_iou_per_image.png")
-        plt.show()
-    else:
-        print("\nNo se pudieron calcular RMSE IoU para ninguna imagen.")
+    return summary, per_image_rows
+
+
+# ---------------------------------------------------------
+# ------------------------ MAIN ---------------------------
+# ---------------------------------------------------------
+
+def main():
+
+    # cargar nombres
+    with open(NAMES_YAML, "r") as f:
+        names_list = yaml.safe_load(f)["names"]
+
+    splits = {
+        "train": (list_images(TRAIN_IMAGES), TRAIN_LABELS),
+        "val":   (list_images(VAL_IMAGES),   VAL_LABELS),
+        "test":  (list_images(TEST_IMAGES),  TEST_LABELS)
+    }
+
+    for split_name, (imgs, lbl_dir) in splits.items():
+        if not imgs:
+            print(f"[WARN] No hay imágenes en {split_name}, se omite.")
+            continue
+
+        print(f"\n[INFO] Evaluando {split_name} ({len(imgs)} imágenes)...")
+
+        summary, per_image = evaluate_model(MODEL_PT, imgs, lbl_dir, names_list)
+
+        # CSV de imágenes
+        df = pd.DataFrame(per_image)
+        df.to_csv(OUTPUT_DIR / f"{split_name}_iou_per_image.csv", index=False)
+
+        # CSV por clase
+        rows = []
+        for cls_id, info in summary["per_class"].items():
+            rows.append({
+                "class_id": cls_id,
+                "class_name": info["class_name"],
+                "mean_iou": info["mean_iou"],
+                "std_iou": info["std_iou"],
+                "count": info["count"]
+            })
+        pd.DataFrame(rows).to_csv(OUTPUT_DIR / f"{split_name}_iou_per_class.csv", index=False)
+
+        # JSON
+        with open(OUTPUT_DIR / f"{split_name}_iou_summary.json", "w") as f:
+            json.dump(summary, f, indent=2)
+
+        # TXT
+        with open(OUTPUT_DIR / f"{split_name}_iou_summary.txt", "w") as f:
+            f.write(f"Split: {split_name}\n")
+            f.write(f"Date: {datetime.now().isoformat()}\n\n")
+            f.write(f"Images: {len(imgs)}\n")
+            f.write(f"Global mean IoU: {summary['global_mean_iou']:.5f}\n")
+            f.write(f"Std: {summary['global_std_iou']:.5f}\n")
+            f.write(f"Total GT boxes: {summary['total_gt_boxes']}\n\n")
+            f.write("Per-class IoU:\n")
+            for cls_id, info in summary["per_class"].items():
+                f.write(f"  - {info['class_name']} (id {cls_id}): mean={info['mean_iou']} std={info['std_iou']} count={info['count']}\n")
+
+    print("\n[OK] Análisis completado. Resultados en:", OUTPUT_DIR)
+
 
 if __name__ == "__main__":
-    evaluate_model_visual(MODEL_PATH, VAL_DIR, VAL_LABELS_DIR, OUTPUT_DIR)
+    main()
